@@ -55,6 +55,7 @@ export function Topbar({ onToggleSidebar, sidebarOpen }) {
       dark:bg-tn-panel bg-white border-b dark:border-tn-muted/20 border-gray-200
       flex-shrink-0 relative z-sticky">
       <div class="flex items-center gap-3 min-w-0">
+        <h2>Test</h2?
         <button
           type="button"
           onClick=${onToggleSidebar}
