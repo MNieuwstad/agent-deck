@@ -696,6 +696,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: web server setup failed: %v\n", err)
 			os.Exit(1)
 		}
+		server.SetMutator(ui.NewWebMutator(homeModel))
 		if costStore != nil {
 			server.SetCostStore(costStore)
 		}
