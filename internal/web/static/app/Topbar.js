@@ -79,7 +79,7 @@ export function Topbar({ onToggleSidebar, sidebarOpen }) {
             <rect x="14" y="28" width="16" height="3" rx="1.5" fill="#73daca"/>
             <circle cx="34" cy="29.5" r="2" fill="#73daca"/>
           </svg>
-          <span class="font-semibold text-sm dark:text-tn-fg text-gray-900 md:hidden lg:inline">Agent Deck</span>
+          <span class="font-semibold text-sm dark:text-tn-fg text-gray-900 md:hidden lg:inline">MNieuwstad Fix/drop Agent Deck</span>
         </span>
       </div>
 
