@@ -385,6 +385,109 @@ func TestMutationNilMutatorReturns503(t *testing.T) {
 	}
 }
 
+// TestCreateSession_ForwardsGroupPath verifies that the groupPath field in the
+// POST /api/sessions body is correctly passed through the handler to the
+// SessionMutator. This is the server-side counterpart to the PR-1 JS change
+// that wires the GROUP selector into the CreateSessionDialog form.
+func TestCreateSession_ForwardsGroupPath(t *testing.T) {
+	var capturedGroupPath string
+	srv := NewServer(Config{
+		ListenAddr:   "127.0.0.1:0",
+		WebMutations: true,
+	})
+	srv.menuData = &fakeMenuDataLoader{snapshot: &MenuSnapshot{}}
+	srv.mutator = &fakeMutator{
+		createSessionFn: func(title, tool, projectPath, groupPath string) (string, error) {
+			capturedGroupPath = groupPath
+			return "sess-grp-1", nil
+		},
+	}
+
+	body := strings.NewReader(`{"title":"t","tool":"claude","projectPath":"/tmp","groupPath":"my-group"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/sessions", body)
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if capturedGroupPath != "my-group" {
+		t.Errorf("expected groupPath %q, got %q", "my-group", capturedGroupPath)
+	}
+}
+
+// TestCreateSession_OmittedGroupPathIsEmpty verifies that when groupPath is
+// absent from the request body the mutator receives an empty string (not a
+// 400 error), preserving the pre-PR-1 behaviour for sessions with no group.
+func TestCreateSession_OmittedGroupPathIsEmpty(t *testing.T) {
+	var capturedGroupPath = "UNSET" // sentinel; must be overwritten
+	srv := NewServer(Config{
+		ListenAddr:   "127.0.0.1:0",
+		WebMutations: true,
+	})
+	srv.menuData = &fakeMenuDataLoader{snapshot: &MenuSnapshot{}}
+	srv.mutator = &fakeMutator{
+		createSessionFn: func(title, tool, projectPath, groupPath string) (string, error) {
+			capturedGroupPath = groupPath
+			return "sess-nogrp-1", nil
+		},
+	}
+
+	body := strings.NewReader(`{"title":"t","tool":"claude","projectPath":"/tmp"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/sessions", body)
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if capturedGroupPath != "" {
+		t.Errorf("expected empty groupPath when omitted, got %q", capturedGroupPath)
+	}
+}
+
+// TestCreateSession_AcceptsAllSevenBuiltInTools verifies that the HTTP handler
+// accepts every tool name in the PR-1 expanded tool list without returning an
+// error. The server does not validate tool names (custom tools are also valid),
+// so each should yield 201 with the tool string forwarded verbatim.
+func TestCreateSession_AcceptsAllSevenBuiltInTools(t *testing.T) {
+	tools := []string{"claude", "codex", "gemini", "opencode", "copilot", "pi", "shell"}
+	for _, tool := range tools {
+		tool := tool // capture
+		t.Run(tool, func(t *testing.T) {
+			t.Parallel()
+			var capturedTool string
+			srv := NewServer(Config{
+				ListenAddr:   "127.0.0.1:0",
+				WebMutations: true,
+			})
+			srv.menuData = &fakeMenuDataLoader{snapshot: &MenuSnapshot{}}
+			srv.mutator = &fakeMutator{
+				createSessionFn: func(title, tt, projectPath, groupPath string) (string, error) {
+					capturedTool = tt
+					return "sess-" + tt, nil
+				},
+			}
+
+			body := strings.NewReader(fmt.Sprintf(
+				`{"title":"t","tool":%q,"projectPath":"/tmp"}`, tool))
+			req := httptest.NewRequest(http.MethodPost, "/api/sessions", body)
+			req.Header.Set("Content-Type", "application/json")
+			rr := httptest.NewRecorder()
+			srv.Handler().ServeHTTP(rr, req)
+
+			if rr.Code != http.StatusCreated {
+				t.Fatalf("tool %q: expected 201, got %d: %s", tool, rr.Code, rr.Body.String())
+			}
+			if capturedTool != tool {
+				t.Errorf("tool %q: mutator received %q", tool, capturedTool)
+			}
+		})
+	}
+}
+
 func TestMutationNotifiesSSE(t *testing.T) {
 	srv := NewServer(Config{
 		ListenAddr:   "127.0.0.1:0",
